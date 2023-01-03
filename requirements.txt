@@ -3,7 +3,6 @@ certifi==2021.10.8
 charset-normalizer==2.0.7
 click==8.0.3
 et-xmlfile==1.1.0
-Flask==2.0.2
 idna==3.3
 boto3==1.26.38
 itsdangerous==2.0.1

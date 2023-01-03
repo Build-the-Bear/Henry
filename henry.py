@@ -8,7 +8,7 @@ import time
 import ast
 import os
 
-from henryPrompts import randomMessages, triggerMessages
+from henryPrompts import randomPrompts, randomMessages, triggerMessages
 from boto3.dynamodb.conditions import Key
 from dotenv import load_dotenv
 
@@ -19,6 +19,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # define environment variables
 lastUpdateID = -1 # offset response from getTelegramUpdates
+lastChatIDs = [0, 0, 0] # chat IDs for the last few messages, to prevent flooding
 existingChats = {} # e.g. {-1001640903207: "Last message sent"}
 existingReplies = {} # e.g. {-1001640903207: [100, 250, 3000]}
 
@@ -95,11 +96,16 @@ def isGroupChat(chatID):
 
 # trigger unique responses by keyword
 def triggerResponse(chatID, messageID, trigger):
+    sendIt = True
     cid = str(chatID)
     # season henry's output with cyborg stock
     mess = spice(random.choice(triggerMessages[trigger]))
 
-    if existingChats[chatID] != mess and mess != "" :
+    # prevent flooding an individual chat
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+        sendIt = False
+
+    if existingChats[chatID] != mess and mess != "" and sendIt:
         try:
             existingChats[chatID] = mess
 
@@ -114,39 +120,51 @@ def triggerResponse(chatID, messageID, trigger):
 
             updateDatabase(chatID, replies, mess)
 
+            lastChatIDs.pop(0)
+            lastChatIDs.append(chatID)
+
             logging.info("Henry had some words to say in Chat: " + cid + ": " + mess)
         except requests.exceptions.HTTPError as err:
             logging.info("Henry was met with a closed door: " + err)
 
 # trigger random responses
 def sendRandomMessage():
+    sendIt = True
     chatID = random.choice(list(existingChats))
     mess = spice(random.choice(randomMessages))
 
     while isGroupChat(chatID) != True and mess != "":
         chatID = random.choice(list(existingChats))
 
-    try:
-        url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
-        x = requests.post(url, json={})
+    # prevent flooding an individual chat
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+        sendIt = False
 
-        updateDatabase(chatID, existingReplies[str(chatID)], mess)
+    if existingChats[chatID] != mess and mess != "" and sendIt:
+        try:
+            url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
+            x = requests.post(url, json={})
 
-        logging.info("Henry had some words to say in Chat: " + str(chatID) + ": " + mess)
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry was met with a closed door: " + err)
+            updateDatabase(chatID, existingReplies[str(chatID)], mess)
+
+            lastChatIDs.pop(0)
+            lastChatIDs.append(chatID)
+
+            logging.info("Henry had some words to say in Chat: " + str(chatID) + ": " + mess)
+        except requests.exceptions.HTTPError as err:
+            logging.info("Henry was met with a closed door: " + err)
 
 # artificial seasoning
 def spice(message):
     # season the prompt
     response = openai.Completion.create(
-      model="text-davinci-002",
-      prompt=randomizePrompt(message),
-      temperature=1.0,
-      max_tokens=40,
-      top_p=1,
-      frequency_penalty=0.75,
-      presence_penalty=0.75,
+      model = "text-davinci-002",
+      prompt = random.choice(randomPrompts) + "\n\n'" + message + "'",
+      temperature = 1.1,
+      max_tokens = 40,
+      top_p = 1,
+      frequency_penalty = 0.9,
+      presence_penalty = 0.9,
     )
 
     mess = response.choices[0].text
@@ -159,17 +177,11 @@ def spice(message):
         mess = mess[1:]
         mess = mess[:-1]
 
-    # only reply 70% of the time Henry gets triggered
+    # only reply 60% of the time Henry gets triggered
     r = random.randint(1, 10)
-    if r > 7 : mess = ""
+    if r > 6 : mess = ""
 
     return mess
-
-def randomizePrompt(prompt):
-    return """Comment on the following with a single, unique, complete sentence. Positivity and optimism highly encouraged. Be as creative as possible.
-
-Prompt: {}
-Replies:""".format(prompt.capitalize())
 
 # update database
 def updateDatabase(chatID, replies, lastReply):
