@@ -26,8 +26,8 @@ existingReplies = {} # e.g. {-1001640903207: [100, 250, 3000]}
 # connect to dynamodb on aws
 dynamodb = boto3.resource('dynamodb', aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID'),
                                   aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY'), region_name='us-east-2')
-# chatInfo = dynamodb.Table('chat_info')
-chatInfo = dynamodb.Table('henry_test_chat_information')
+chatInfo = dynamodb.Table('chat_info')
+# chatInfo = dynamodb.Table('henry_test_chat_information')
 
 # designate log location
 logging.basicConfig(filename='henry.log', level=logging.INFO)
@@ -48,7 +48,7 @@ def getTelegramUpdates():
     global lastUpdateID
 
     # offset by last updates retrieved
-    url = 'https://api.telegram.org/' + os.getenv('DEV_TELEGRAM_API_KEY') + '/getupdates?offset=' + str(lastUpdateID + 1)
+    url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/getupdates?offset=' + str(lastUpdateID + 1)
     updates = requests.get(url)
     response = updates.json()['result']
 
@@ -89,7 +89,7 @@ def checkForNewChatID(chatID):
 # make sure we're not saving user chats
 def isGroupChat(chatID):
     try:
-        url = 'https://api.telegram.org/' + os.getenv('DEV_TELEGRAM_API_KEY') + '/getChat?chat_id=' + str(chatID)
+        url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/getChat?chat_id=' + str(chatID)
         updates = requests.get(url)
 
         if len(updates.json()['result']['type']) : type = updates.json()['result']['type']
@@ -128,7 +128,7 @@ def sendResponse(chatID, messageID, message):
     try:
         existingChats[chatID] = message
 
-        url = 'https://api.telegram.org/' + os.getenv('DEV_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + cid + '&reply_to_message_id=' + mid + '&text=' + message
+        url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + cid + '&reply_to_message_id=' + mid + '&text=' + message
         x = requests.post(url, json={})
 
         time.sleep(10) #prevent api blacklisting
@@ -161,7 +161,7 @@ def sendRandomMessage():
 
     if existingChats[chatID] != mess and mess != "" and sendIt:
         try:
-            url = 'https://api.telegram.org/' + os.getenv('DEV_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
+            url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
             x = requests.post(url, json={})
 
             updateDatabase(chatID, existingReplies[str(chatID)], mess)
