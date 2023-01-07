@@ -27,7 +27,7 @@ Hosted on AWS EC2 using DynamoDB, built with Python, OpenAI & Telegram Bot APIs
 4. Make a copy of the example environment variables file
 
    ```bash
-        .env.example .env
+        cp .env.example .env
    ```
 
 5. Add your [OpenAI API key](https://beta.openai.com/account/api-keys) to the newly created `.env` file 
