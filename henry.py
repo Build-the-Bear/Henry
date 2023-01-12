@@ -32,17 +32,6 @@ chatInfo = dynamodb.Table('chat_info')
 # designate log location
 logging.basicConfig(filename='henry.log', level=logging.INFO)
 
-# fetch existing chats_ids from aws
-def getExistingChatInformation():
-    response = chatInfo.scan()
-
-    for i in response['Items']:
-        if 'last_reply' in i and i['last_reply'] is not None:
-            existingChats[i['chat_id']] = i['last_reply']
-        else:
-            existingChats[i['chat_id']] = ""
-        existingReplies[str(i['chat_id'])] = ast.literal_eval(i['chat_replies'])
-
 # fetch recent updates from telegram
 def getTelegramUpdates():
     global lastUpdateID
@@ -58,25 +47,44 @@ def getTelegramUpdates():
         lastUpdateID = response[len(response) - 1]['update_id']
 
     for i in response:# if we see henry has been added to any new chats, add the chat_id to our database
-        if "my_chat_member" in i and i['my_chat_member']['new_chat_member']['user']['first_name'] == 'Henry the Hypemachine':
-            isGroupChat(i['my_chat_member']['chat']['id'])
+        if ("my_chat_member" in i and
+            i['my_chat_member']['new_chat_member']['user']['first_name'] == 'Henry the Hypemachine'):
+                isGroupChat(i['my_chat_member']['chat']['id'])
 
         # check new messages
         if "message" in i and "text" in i['message']:
             checkForNewChatID(i['message']['chat']['id'])
 
             # if henry was replied to directly
-            if "reply_to_message" in i['message'] and i['message']['reply_to_message']['from']['username'].startswith('Henrythe'):
-                henryReplies(i['message']['text'], i['message']['chat']['id'], i['message']['message_id'])
+            if ("reply_to_message" in i['message'] and
+                isSentence(i['message']['text']) and
+                "username" in i['message']['reply_to_message']['from'] and
+                i['message']['reply_to_message']['from']['username'].startswith('Henrythe')):
+                    henryReplies(i['message']['text'], i['message']['chat']['id'], i['message']['message_id'])
 
             # if any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
             for j in triggerMessages:
                 matchFound = False
 
-                if j in i['message']['text'] or j.lower() in i['message']['text'] or j.upper() in i['message']['text']:
-                    matchFound = True
-                if matchFound and i['message']['message_id'] not in existingReplies[str(i['message']['chat']['id'])]:
-                    triggerResponse(i['message']['chat']['id'], i['message']['message_id'], j)
+                if (j in i['message']['text'] or
+                    j.lower() in i['message']['text'] or
+                    j.upper() in i['message']['text']):
+                        matchFound = True
+                if (matchFound and
+                    isSentence(i['message']['text']) and
+                    i['message']['message_id'] not in existingReplies[str(i['message']['chat']['id'])]):
+                        triggerResponse(i['message']['chat']['id'], i['message']['message_id'], j)
+
+# fetch existing chats_ids from aws
+def getExistingChatInformation():
+    response = chatInfo.scan()
+
+    for i in response['Items']:
+        if 'last_reply' in i and i['last_reply'] is not None:
+            existingChats[i['chat_id']] = i['last_reply']
+        else:
+            existingChats[i['chat_id']] = ""
+        existingReplies[str(i['chat_id'])] = ast.literal_eval(i['chat_replies'])
 
 # conditionally save a new chat_id
 def checkForNewChatID(chatID):
@@ -99,11 +107,53 @@ def isGroupChat(chatID):
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
 
+# check triggers and replies for worthiness
+def isSentence(s):
+  return len(s.split()) > 1
+
+# artificial seasoning
+def spice(message, isReply, optionalPrompt):
+    # construct message
+    mess = "mess"
+    r = random.randint(1, 10)
+
+    # only reply 70% of the time Henry gets triggered
+    if isReply == False and r > 7:
+        mess = ""
+
+    if mess != "":
+        # if no specific prompt was provided, choose a random one
+        if optionalPrompt == "":
+            optionalPrompt = random.choice(randomPrompts)
+
+        # season the prompt
+        response = openai.Completion.create(
+          model = "text-davinci-002",
+          prompt = optionalPrompt + "\n\n'" + message + "'",
+          temperature = 1.1,
+          max_tokens = 50,
+          top_p = 1,
+          frequency_penalty = 0.9,
+          presence_penalty = 0.9,
+        )
+
+        # for the memes
+        mess = response.choices[0].text.replace("ors", "ooors")
+
+        # clean up the presentation
+        if mess[0] == '"' and mess[-1] == '"':
+            mess = mess[1:]
+            mess = mess[:-1]
+
+    return mess
+
 # trigger unique responses based on direct replies to henry
 def henryReplies(toMessage, chatID, messageID):
     cid = str(chatID)
     # season henry's output with cyborg stock
-    mess = spice(toMessage, True, "Reply to the following using the voice of a king from the 1500s. Be confident, optimistic, extremely brief, and as creative as possible. You must respond with complete sentences.")
+    mess = spice(toMessage, True, "Reply to the following using the voice of a king from the 1500s. " +
+                                  "Be confident, optimistic, extremely brief, and as creative as possible. " +
+                                  "You must respond with complete sentences.")
 
     if existingChats[chatID] != mess and mess != "":
         sendResponse(chatID, messageID, mess)
@@ -111,16 +161,48 @@ def henryReplies(toMessage, chatID, messageID):
 # trigger unique responses by keyword
 def triggerResponse(chatID, messageID, trigger):
     sendIt = True
-    # season henry's output with cyborg stock
-    mess = spice(random.choice(triggerMessages[trigger]), False, "")
+    mess = ""
 
     # prevent flooding an individual chat
     if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
         sendIt = False
+    else:
+        # season henry's output with cyborg stock
+        mess = spice(random.choice(triggerMessages[trigger]), False, "")
 
     if existingChats[chatID] != mess and mess != "" and sendIt:
         sendResponse(chatID, messageID, mess)
 
+# trigger random responses
+def sendRandomMessage(shouldSend):
+    chatID = random.choice(list(existingChats))
+    mess = ""
+
+    # prevent flooding an individual chat
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+        shouldSend = False
+    else:
+        mess = spice(random.choice(randomMessages), False, "")
+
+        while isGroupChat(chatID) != True and mess != "":
+            chatID = random.choice(list(existingChats))
+
+    # if the message was constructed and should be sent
+    if existingChats[chatID] != mess and mess != "" and shouldSend:
+        try:
+            url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
+            x = requests.post(url, json={})
+
+            updateDatabase(chatID, existingReplies[str(chatID)], mess)
+
+            lastChatIDs.pop(0)
+            lastChatIDs.append(chatID)
+
+            logging.info("Henry had some words to say in Chat " + str(chatID) + ": " + mess)
+        except requests.exceptions.HTTPError as err:
+            logging.info("Henry was met with a closed door: " + err)
+
+# send henry's message(s) off to the telegram api
 def sendResponse(chatID, messageID, message):
     cid = str(chatID)
     mid = str(messageID)
@@ -142,68 +224,9 @@ def sendResponse(chatID, messageID, message):
         lastChatIDs.pop(0)
         lastChatIDs.append(chatID)
 
-        logging.info("Henry had some words to say in Chat: " + cid + ": " + message)
+        logging.info("Henry had some words to say in Chat " + cid + ": " + message)
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
-
-# trigger random responses
-def sendRandomMessage():
-    sendIt = True
-    chatID = random.choice(list(existingChats))
-    mess = spice(random.choice(randomMessages), False, "")
-
-    while isGroupChat(chatID) != True and mess != "":
-        chatID = random.choice(list(existingChats))
-
-    # prevent flooding an individual chat
-    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
-        sendIt = False
-
-    if existingChats[chatID] != mess and mess != "" and sendIt:
-        try:
-            url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
-            x = requests.post(url, json={})
-
-            updateDatabase(chatID, existingReplies[str(chatID)], mess)
-
-            lastChatIDs.pop(0)
-            lastChatIDs.append(chatID)
-
-            logging.info("Henry had some words to say in Chat: " + str(chatID) + ": " + mess)
-        except requests.exceptions.HTTPError as err:
-            logging.info("Henry was met with a closed door: " + err)
-
-# artificial seasoning
-def spice(message, isReply, optionalPrompt):
-    # if no specific prompt was provided, choose a random one
-    if optionalPrompt == "":
-        optionalPrompt = random.choice(randomPrompts)
-
-    # season the prompt
-    response = openai.Completion.create(
-      model = "text-davinci-002",
-      prompt = optionalPrompt + "\n\n'" + message + "'",
-      temperature = 1.1,
-      max_tokens = 50,
-      top_p = 1,
-      frequency_penalty = 0.9,
-      presence_penalty = 0.9,
-    )
-
-    # for the memes
-    mess = response.choices[0].text.replace("ors", "ooors")
-
-    # clean up the presentation
-    if mess[0] == '"' and mess[-1] == '"':
-        mess = mess[1:]
-        mess = mess[:-1]
-
-    if isReply == False:
-        # only reply 60% of the time Henry gets triggered
-        r = random.randint(1, 10)
-        if r > 6 : mess = ""
-
-    return mess
 
 # update database
 def updateDatabase(chatID, replies, lastReply):
@@ -232,24 +255,19 @@ if __name__ == '__main__':
     getExistingChatInformation()
     getTelegramUpdates()
 
-    # spread some cheer
-    if len(list(existingChats)) : sendRandomMessage()
-
-    # set up update-check & trigger-message cycle
-    runningTime, oneDaysTime = 0, 43200
-    cycleTime = (oneDaysTime / 1) / (len(existingChats) + 1)
+    # calculate probability of random messages based on number of existingChats, waitTime, and cycleTime
+    runningTime, cycleTime, runsCap, oneHoursTime, oneDaysTime = 0, 10, 360, 3600, 86400
+    waitTime = oneDaysTime / len(list(existingChats))
+    chance = (runsCap / (waitTime / cycleTime)) / 24
 
     # while running
-    while runningTime < oneDaysTime:
+    while runningTime < (oneHoursTime - 120):
+        r = random.uniform(0.0, 1.0)
+
+        if r <= chance:
+            sendRandomMessage(True)
+
         runningTime += 10
-
-        # if it's time to spread more cheer
-        if runningTime >= cycleTime :
-            sendRandomMessage()
-            runningTime = 0
-        # else : logging.info("Carrying on, nothing new.. %i %i", runningTime, cycleTime)
-
-        # wait before continuing to check for updates
         time.sleep(10)
 
         getExistingChatInformation()
