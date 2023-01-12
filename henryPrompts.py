@@ -1,8 +1,6 @@
 randomPrompts = [
     '"""Comment on the following with a single unique and complete sentence. Positivity and optimism are highly encouraged. Be as creative as possible',
     '"""Comment on the following with a single unique and complete sentence that is very brief. Negativity and pessimism are highly encouraged. Be as creative as possible and speak from the perspective of a degenerate.',
-    '"""Comment on the following with a list of two notes. Positivity, high-energy, and wacky optimism are highly encouraged. Be as creative as possible.',
-    '"""Give an Elevator Pitch based on the following. It must use completes sentences.',
 ]
 
 randomMessages = [
