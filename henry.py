@@ -4,6 +4,7 @@ import logging
 import random
 import openai
 import boto3
+import math
 import time
 import ast
 import os
@@ -55,14 +56,14 @@ def getTelegramUpdates():
         if "message" in i and "text" in i['message']:
             checkForNewChatID(i['message']['chat']['id'])
 
-            # if henry was replied to directly
+            # respond with context if henry was replied to directly
             if ("reply_to_message" in i['message'] and
                 isSentence(i['message']['text']) and
                 "username" in i['message']['reply_to_message']['from'] and
                 i['message']['reply_to_message']['from']['username'].startswith('Henrythe')):
                     henryReplies(i['message']['text'], i['message']['chat']['id'], i['message']['message_id'])
 
-            # if any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
+            # if an any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
             for j in triggerMessages:
                 matchFound = False
 
@@ -126,19 +127,22 @@ def spice(message, isReply, optionalPrompt):
         if optionalPrompt == "":
             optionalPrompt = random.choice(randomPrompts)
 
-        # season the prompt
-        response = openai.Completion.create(
-          model = "text-davinci-002",
-          prompt = optionalPrompt + "\n\n'" + message + "'",
-          temperature = 1.1,
-          max_tokens = 50,
-          top_p = 1,
-          frequency_penalty = 0.9,
-          presence_penalty = 0.9,
-        )
+        try:
+            # season the prompt
+            response = openai.Completion.create(
+              model = "text-davinci-002",
+              prompt = optionalPrompt + "\n\n'" + message + "'",
+              temperature = 1.1,
+              max_tokens = 50,
+              top_p = 1,
+              frequency_penalty = 0.9,
+              presence_penalty = 0.9,
+            )
 
-        # for the memes
-        mess = response.choices[0].text.replace("ors", "ooors")
+            # for the memes
+            mess = response.choices[0].text.replace("ors", "ooors")
+        except requests.exceptions.HTTPError as err:
+            logging.info("Henry couldn't figure out how to open the door: " + err)
 
         # clean up the presentation
         if mess[0] == '"' and mess[-1] == '"':
@@ -255,16 +259,16 @@ if __name__ == '__main__':
     getExistingChatInformation()
     getTelegramUpdates()
 
-    # calculate probability of random messages based on number of existingChats, waitTime, and cycleTime
-    runningTime, cycleTime, runsCap, oneHoursTime, oneDaysTime = 0, 10, 360, 3600, 86400
-    waitTime = oneDaysTime / len(list(existingChats))
-    chance = (runsCap / (waitTime / cycleTime)) / 24
+    chatCount = len(list(existingChats))
+    runningTime, lastMessageTime, oneDaysTime = 0, 0, 86400
+    waitTime = 10
+
+    if chatCount < (oneDaysTime / 10):
+        waitTime = oneDaysTime / chatCount
 
     # while running
-    while runningTime < (oneHoursTime - 120):
-        r = random.uniform(0.0, 1.0)
-
-        if r <= chance:
+    while True:
+        if runningTime % round(waitTime, -1) == 0:
             sendRandomMessage(True)
 
         runningTime += 10
