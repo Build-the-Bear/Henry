@@ -97,11 +97,13 @@ def checkForNewChatID(chatID):
 
 # make sure we're not saving user chats
 def isGroupChat(chatID):
+    type = "undetermined"
+
     try:
         url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/getChat?chat_id=' + str(chatID)
         updates = requests.get(url)
 
-        if len(updates.json()['result']['type']) : type = updates.json()['result']['type']
+        if "result" in updates.json() and "type" in updates.json()['result'] : type = updates.json()['result']['type']
 
         if type != "private": return True
         else: return False
