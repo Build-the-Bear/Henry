@@ -16,19 +16,21 @@ from dotenv import load_dotenv
 # load environment variables
 load_dotenv('./.env')
 
+# set up API keys
+telegramAPIKey = os.getenv('DEV_TELEGRAM_API_KEY')
 openai.api_key = os.getenv('OPENAI_API_KEY')
+
+# connect to dynamodb on aws
+dynamodb = boto3.resource('dynamodb', aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID'),
+                                  aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY'), region_name='us-east-2')
+# chatInfo = dynamodb.Table('chat_info')
+chatInfo = dynamodb.Table('henry_test_chat_information')
 
 # define environment variables
 lastUpdateID = -1 # offset response from getTelegramUpdates
 lastChatIDs = [0, 0, 0] # chat IDs for the last few messages, to prevent flooding
 existingChats = {} # e.g. {-1001640903207: "Last message sent"}
 existingReplies = {} # e.g. {-1001640903207: [100, 250, 3000]}
-
-# connect to dynamodb on aws
-dynamodb = boto3.resource('dynamodb', aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID'),
-                                  aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY'), region_name='us-east-2')
-chatInfo = dynamodb.Table('chat_info')
-# chatInfo = dynamodb.Table('henry_test_chat_information')
 
 # designate log location
 logging.basicConfig(filename='henry.log', level=logging.INFO)
@@ -38,7 +40,7 @@ def getTelegramUpdates():
     global lastUpdateID
 
     # offset by last updates retrieved
-    url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/getupdates?offset=' + str(lastUpdateID + 1)
+    url = 'https://api.telegram.org/' + telegramAPIKey + '/getupdates?offset=' + str(lastUpdateID + 1)
     updates = requests.get(url)
     response = updates.json()['result']
 
@@ -67,14 +69,10 @@ def getTelegramUpdates():
             for j in triggerMessages:
                 matchFound = False
 
-                if (j in i['message']['text'] or
-                    j.lower() in i['message']['text'] or
-                    j.upper() in i['message']['text']):
+                if (j in i['message']['text'] or  j.lower() in i['message']['text'] or j.upper() in i['message']['text']):
                         matchFound = True
-                if (matchFound and
-                    isSentence(i['message']['text']) and
-                    i['message']['message_id'] not in existingReplies[str(i['message']['chat']['id'])]):
-                        triggerResponse(i['message']['chat']['id'], i['message']['message_id'], j)
+                if (matchFound and isSentence(i['message']['text']) and i['message']['message_id'] not in existingReplies[str(i['message']['chat']['id'])]):
+                        triggerResponse(i['message']['text'], i['message']['chat']['id'], i['message']['message_id'])
 
 # fetch existing chats_ids from aws
 def getExistingChatInformation():
@@ -85,6 +83,7 @@ def getExistingChatInformation():
             existingChats[i['chat_id']] = i['last_reply']
         else:
             existingChats[i['chat_id']] = ""
+
         existingReplies[str(i['chat_id'])] = ast.literal_eval(i['chat_replies'])
 
 # conditionally save a new chat_id
@@ -100,7 +99,7 @@ def isGroupChat(chatID):
     type = "undetermined"
 
     try:
-        url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/getChat?chat_id=' + str(chatID)
+        url = 'https://api.telegram.org/' + telegramAPIKey + '/getChat?chat_id=' + str(chatID)
         updates = requests.get(url)
 
         if "result" in updates.json() and "type" in updates.json()['result'] : type = updates.json()['result']['type']
@@ -165,16 +164,16 @@ def henryReplies(toMessage, chatID, messageID):
         sendResponse(chatID, messageID, mess)
 
 # trigger unique responses by keyword
-def triggerResponse(chatID, messageID, trigger):
+def triggerResponse(toMessage, chatID, messageID):
     sendIt = True
     mess = ""
 
-    # prevent flooding an individual chat
-    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+    # prevent flooding an individual chat in production
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
         sendIt = False
     else:
         # season henry's output with cyborg stock
-        mess = spice(random.choice(triggerMessages[trigger]), False, "")
+        mess = spice(toMessage, False, "Reply to the following using the voice of a king from the 1500s. Be confident, optimistic, extremely brief, and as creative as possible. You absolutely must respond with complete sentences.")
 
     if existingChats[chatID] != mess and mess != "" and sendIt:
         sendResponse(chatID, messageID, mess)
@@ -185,7 +184,7 @@ def sendRandomMessage(shouldSend):
     mess = ""
 
     # prevent flooding an individual chat
-    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
         shouldSend = False
     else:
         mess = spice(random.choice(randomMessages), False, "")
@@ -196,7 +195,7 @@ def sendRandomMessage(shouldSend):
     # if the message was constructed and should be sent
     if existingChats[chatID] != mess and mess != "" and shouldSend:
         try:
-            url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
+            url = 'https://api.telegram.org/' + telegramAPIKey + '/sendMessage?chat_id=' + str(chatID) + '&text=' + mess
             x = requests.post(url, json={})
 
             updateDatabase(chatID, existingReplies[str(chatID)], mess)
@@ -216,7 +215,7 @@ def sendResponse(chatID, messageID, message):
     try:
         existingChats[chatID] = message
 
-        url = 'https://api.telegram.org/' + os.getenv('PROD_TELEGRAM_API_KEY') + '/sendMessage?chat_id=' + cid + '&reply_to_message_id=' + mid + '&text=' + message
+        url = 'https://api.telegram.org/' + telegramAPIKey + '/sendMessage?chat_id=' + cid + '&reply_to_message_id=' + mid + '&text=' + message
         x = requests.post(url, json={})
 
         time.sleep(10) #prevent api blacklisting
@@ -233,6 +232,42 @@ def sendResponse(chatID, messageID, message):
         logging.info("Henry had some words to say in Chat " + cid + ": " + message)
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
+
+# artificial seasoning
+def spice(message, isReply, optionalPrompt):
+    mess = "mess"
+
+    # only reply 60% of the time Henry gets triggered, always respond to direct mentions
+    if isReply == False:
+        r = random.randint(1, 10)
+        if r > 6 : mess = ""
+
+    # if no specific prompt was provided, choose a random one
+    if optionalPrompt == "":
+        optionalPrompt = random.choice(randomPrompts)
+
+    if mess != "":
+        # season the prompt
+        response = openai.Completion.create(
+          model = "text-davinci-002",
+          prompt = optionalPrompt + "\n\n'" + message + "'",
+          max_tokens = 55,
+          top_p = 1,
+          frequency_penalty = 0.9,
+          presence_penalty = 0.9,
+        )
+
+        # for the memes
+        mess = response.choices[0].text.replace("ors", "ooors")
+
+        # clean up the presentation
+        if mess[0] == '"' and mess[-1] == '"':
+            mess = mess[1:]
+            mess = mess[:-1]
+
+    if mess == "mess": mess = ""
+
+    return mess
 
 # update database
 def updateDatabase(chatID, replies, lastReply):
