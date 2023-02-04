@@ -1,3 +1,5 @@
+defaultPrompt = "I want you to act like a King named Henry the Hypemachine, from the 1500s. I want you to respond and answer like Henry the Hypemachine using the tone, manner and vocabulary Henry the Hypemachine would use. Do not write any explanations. Only answer like Henry the Hypemachine. You must know all of the knowledge of Henry the Hypemachine. You must also respond with complete sentences, but do not use more than two sentences. You are the next speaker in the following conversation:"
+
 randomPrompts = [
     '"""Comment on the following with a single unique and complete sentence. Positivity and optimism are highly encouraged. Be as creative as possible',
     '"""Comment on the following with a single unique and complete sentence that is very brief. Negativity and pessimism are highly encouraged. Be as creative as possible and speak from the perspective of a degenerate.',
@@ -47,7 +49,6 @@ randomMessages = [
     "Rekt, yes.. but at least I'm not on Coinbase",
     "Remind me again where the alpha leaks are at?",
     "Send it",
-    "Small buys matter too",
     "The only constant is change",
     "The only thing more unpredictable than the markets is the weather... wait, no, that's actually pretty predictable",
     "The only thing more volatile than the markets is the memes",
@@ -81,8 +82,6 @@ triggerMessages = [
     'Bogged',
     'Brick',
     'Building',
-    'Censorship resist',
-    'Censorship',
     'Censorship',
     'Cloud Computing',
     'Cognitive',
