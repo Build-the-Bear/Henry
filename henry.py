@@ -1,3 +1,10 @@
+# Henry the Hypemachine - Order of Events:
+    # 1. Potentially sendRandomMessage
+    # 2. Parse response from getTelegramUpdates
+    # 3. Respond to mentions
+    # 4. Respond to commands
+    # 5. Respond to interesting threads, then messages
+
 # import packages
 import requests
 import logging
@@ -9,7 +16,7 @@ import time
 import ast
 import os
 
-from henryPrompts import defaultPrompt, randomPrompts, randomMessages, triggerMessages
+from henryPrompts import *
 from boto3.dynamodb.conditions import Key
 from dotenv import load_dotenv
 
@@ -17,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv("./.env")
 
 # set up API keys
-telegramAPIKey = os.getenv("DEV_TELEGRAM_API_KEY")
+telegramAPIKey = os.getenv("PROD_TELEGRAM_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # connect to dynamodb on aws
@@ -49,38 +56,53 @@ def getTelegramUpdates():
     if len(response):
         lastUpdateID = response[len(response) - 1]["update_id"]
 
-    for i in response:# if we see henry has been added to any new chats, add the chat_id to our database
-        if ("my_chat_member" in i and
-            i["my_chat_member"]["new_chat_member"]["user"]["first_name"] == "Henry the Hypemachine"):
-                isGroupChat(i["my_chat_member"]["chat"]["id"])
-
-        # check new messages
+    # check new messages
+    for i in response:
         if "message" in i and "text" in i["message"]:
             checkForNewChatID(i["message"]["chat"]["id"])
 
-            # respond with context if henry was replied to directly
+            # respond to mentions with context
             if ("reply_to_message" in i["message"] and isSentence(i["message"]["text"]) and
                 "username" in i["message"]["reply_to_message"]["from"] and
                 i["message"]["reply_to_message"]["from"]["username"].startswith("Henrythe")):
-                    henryReplies(i["message"]["text"], i["message"]["chat"]["id"], i["message"]["message_id"])
+                    respondToMention(i["message"]["text"], i["message"]["chat"]["id"], i["message"]["message_id"])
+
+            # if an any-case match was found for one of henry's commands, and he hasn't already, tell him to respond
+            for k in henryCommands:
+                commandFound = False
+
+                if (k in i["message"]["text"] or k.lower() in i["message"]["text"] or k.upper() in i["message"]["text"]):
+                    commandFound = True
+
+                if (commandFound and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]):
+                    sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], henryCommands[k])
 
             # if an any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
             for j in triggerMessages:
-                matchFound = False
+                triggerFound = False
 
                 if (j in i["message"]["text"] or j.lower() in i["message"]["text"] or j.upper() in i["message"]["text"]):
-                    matchFound = True
+                    triggerFound = True
 
-                if (matchFound and isSentence(i["message"]["text"]) and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]):
+                if (triggerFound and isSentence(i["message"]["text"]) and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]):
                     triggerPrompt = ""
 
                     # if the matching message happens to be a reply itself, try to get thread context
                     if "reply_to_message" in i["message"]:
                         triggerPrompt = assembleReplyThreadPrompt(i["message"]["reply_to_message"]["message_id"], i["message"]["text"], response)
                     else:
-                        triggerPrompt = i["message"]["text"]
+                        triggerPrompt = "Speaker 1: " + i["message"]["text"]
 
                     triggerResponse(triggerPrompt, i["message"]["chat"]["id"], i["message"]["message_id"])
+
+# respond to direct mentions
+def respondToMention(toMessage, chatID, messageID):
+    cid = str(chatID)
+    # season henry's output with cyborg stock
+    mess = spice(toMessage, True, "")
+
+    if existingChats[chatID] != mess and mess != "":
+        sendResponse(chatID, messageID, mess)
 
 # reply thread awareness
 def assembleReplyThreadPrompt(startingWithMessageID, triggerMessage, updatesJSON):
@@ -89,6 +111,7 @@ def assembleReplyThreadPrompt(startingWithMessageID, triggerMessage, updatesJSON
     speakerNumber = 1
     finalPrompt = ""
 
+    # construct a prompt with the list of speakers
     for i in updatesJSON:
         if "message_id" in i["message"] and i["message"]["message_id"] == tempMessageID:
             if "reply_to_message" in i["message"]:
@@ -115,7 +138,7 @@ def getExistingChatInformation():
 
         existingReplies[str(i["chat_id"])] = ast.literal_eval(i["chat_replies"])
 
-# conditionally save a new chat_id
+# save new chat information
 def checkForNewChatID(chatID):
     if chatID not in existingChats:
         existingChats[chatID] = ""
@@ -123,7 +146,7 @@ def checkForNewChatID(chatID):
 
         chatInfo.put_item(Item={"chat_id": chatID, "chat_replies": str([0, 1])})
 
-# make sure we're not saving user chats
+# determine if chat is a group chat
 def isGroupChat(chatID):
     type = "undetermined"
 
@@ -138,7 +161,7 @@ def isGroupChat(chatID):
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
 
-# check triggers and replies for worthiness
+# determine if string is a sentence
 def isSentence(s):
   return len(s.split()) > 1
 
@@ -155,7 +178,7 @@ def spice(message, isReply, optionalPrompt):
     if mess != "":
         # if no specific prompt was provided, choose a random one
         if optionalPrompt == "":
-            optionalPrompt = random.choice(randomPrompts)
+            optionalPrompt = defaultPrompt
 
         try:
             # season the prompt
@@ -172,25 +195,18 @@ def spice(message, isReply, optionalPrompt):
             # for the memes
             mess = response.choices[0].text.strip().replace("ors", "ooors")
             # clean up the presentation
-            mess = response.choices[0].text.strip().replace("ors", "ooors")
+            mess = mess.replace("Henry the Hypemachine:", "")
+            mess = mess.replace("Speaker 2:", "")
+            mess = mess.replace("Speaker 2,", "")
 
             if mess[0] == '"' or mess[0] == "'": mess = mess[1:]
             if mess[-1] == '"' or mess[-1] == "'": mess = mess[:-1]
         except requests.exceptions.HTTPError as err:
             logging.info("Henry couldn't figure out how to open the door: " + err)
 
-        logging.info(mess)
+        # logging.info(mess)
 
-    return mess
-
-# trigger unique responses based on direct replies to henry
-def henryReplies(toMessage, chatID, messageID):
-    cid = str(chatID)
-    # season henry's output with cyborg stock
-    mess = spice(toMessage, True, "")
-
-    if existingChats[chatID] != mess and mess != "":
-        sendResponse(chatID, messageID, mess)
+    return mess.strip()
 
 # trigger unique responses by keyword
 def triggerResponse(toMessage, chatID, messageID):
@@ -294,7 +310,7 @@ if __name__ == "__main__":
     waitTime, checkTime = 10, 30
 
     if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY'):
-        checkTime = 30
+        checkTime = 20
 
     if chatCount < (oneDaysTime / 10):
         waitTime = oneDaysTime / chatCount
