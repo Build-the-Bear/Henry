@@ -30,8 +30,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # connect to dynamodb on aws
 dynamodb = boto3.resource("dynamodb", aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID"),
                                   aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"), region_name = "us-east-2")
-# chatInfo = dynamodb.Table('chat_info')
-chatInfo = dynamodb.Table("henry_test_chat_information")
+chatInfo = dynamodb.Table('chat_info')
+# chatInfo = dynamodb.Table("henry_test_chat_information")
 
 # define environment variables
 lastUpdateID = -1 # offset response from getTelegramUpdates
