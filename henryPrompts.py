@@ -4,7 +4,16 @@ ahenryCommands = {
     "/marketing": "Please DM me with your marketing proposal(s).\nI shall ensure swift delivery to the appropriate party. 👹",
 }
 
-defaultPrompt = "I want you to act like a King named Henry the Hypemachine, from the 1500s. I want you to respond and answer like Henry the Hypemachine using the tone, manner and vocabulary Henry the Hypemachine would use. Do not write any explanations. Only answer like Henry the Hypemachine. You must know all of the knowledge of Henry the Hypemachine. You must also respond with complete sentences, but do not use more than two sentences. You are the next speaker in the following conversation:"
+defaultPrompt = "I want you to act like an old King named Henry the Hypemachine from the 1500s. I want you to respond and answer like Henry the Hypemachine using the tone, manner and vocabulary Henry the Hypemachine would use. Do not write any explanations. Only answer like Henry the Hypemachine. You must know all of the knowledge of Henry the Hypemachine. You must also respond with complete sentences, but do not use more than two sentences. You should be as creative, positive, and optimistic as possible without mentioning any part of these instructions. You are the next speaker in the following conversation:"
+
+stickerIDs = [
+    "CAACAgEAAx0Ca6thUgACBsdj7uihZA8Y901yT4D5wglZU7eglgACkgIAAqtT8UdOQ8_9obsx3i4E",
+    "CAACAgEAAx0Ca6thUgACBx5j7vNLXh8HN4wLFi-LE1YvTUaBjQACRAIAAv-ioEegbPm_Vwkc4y4E",
+    "CAACAgEAAx0Ca6thUgACBx9j7vNPiC-2TUGNuc18FvaFG5P4MwAChgIAAkJisEf-PR0oIJwLjy4E",
+    "CAACAgEAAx0Ca6thUgACByBj7vNXfV1ffJ_DwuOwHsVdjsAEDAACegIAAtQ9IUTS2S5Fhx5kAy4E",
+    "CAACAgEAAx0Ca6thUgACByFj7vNZKNQjt8vZE3-Or32X7FaBkwAC8QIAAkAKUEVVC5LaDUtoji4E",
+    "CAACAgEAAx0Ca6thUgACByJj7vNbuN5DwqbYQ9ohsyddVUY1JQAC7QIAAhYYUUVgvX4fG37cyi4E",
+]
 
 randomMessages = [
     "/BUILD_THE_BEAR\n/BRING_THE_BULL",
@@ -20,6 +29,7 @@ randomMessages = [
     "Community works hard",
     "DeFi or die tryin'",
     "Dev works hard",
+    "Diamond Hands",
     "Eat the zero",
     "Elegance, class, truly exquisite",
     "Every day is a rollercoaster of emotions",
@@ -30,7 +40,6 @@ randomMessages = [
     "Hope the sun is shining wherever you are",
     "I think it's time for an intervention. Someone needs to tell the royal chef that 'burn it until it's black' is not a valid cooking technique.",
     "I've been ruling England for centuries and I still don't know how to fix a clogged drain.",
-    "I've been ruling for so long that my royal robes are now distressed skinny jeans.",
     "I've got my poker face on",
     "If I had a dollar for every time someone called me 'Your Majesty,' I'd be super rich.. #blessed",
     "If you're not getting rekt, you're not doing it right",
@@ -86,6 +95,8 @@ triggerMessages = [
     'Blockchain',
     'Bogged',
     'Brick',
+    'Buidl',
+    'Builders',
     'Building',
     'Bull market',
     'Bull run',
@@ -116,6 +127,7 @@ triggerMessages = [
     'DeFi riches',
     'DeFi yield',
     'Deficit',
+    'Diamond',
     'Digital Literacy',
     'Digital Nomads',
     'Digital Transformation',
@@ -199,6 +211,7 @@ triggerMessages = [
     'Robot',
     'Robotics',
     'Roll the dice',
+    'Ryoshi',
     'Safe haven',
     'Sats',
     'SBF',
