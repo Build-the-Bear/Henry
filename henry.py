@@ -34,10 +34,10 @@ chatInfo = dynamodb.Table('chat_info')
 # chatInfo = dynamodb.Table("henry_test_chat_information")
 
 # define environment variables
-lastUpdateID = -1 # offset response from getTelegramUpdates
-lastChatIDs = [0, 0, 0] # chat IDs for the last few messages, to prevent flooding
-existingChats = {} # e.g. {-1001640903207: "Last message sent"}
-existingReplies = {} # e.g. {-1001640903207: [100, 250, 3000]}
+lastUpdateID = -1  # offset response from getTelegramUpdates
+lastChatIDs = [0, 0, 0]  # chat IDs for the last few messages, to prevent flooding
+existingChats = {}  # e.g. {-1001640903207: "Last message sent"}
+existingReplies = {}  # e.g. {-1001640903207: [100, 250, 3000]}
 
 # designate log location
 logging.basicConfig(filename="henry.log", level=logging.INFO)
@@ -65,31 +65,38 @@ def getTelegramUpdates():
             if ("reply_to_message" in i["message"] and isSentence(i["message"]["text"]) and
                 "username" in i["message"]["reply_to_message"]["from"] and
                 i["message"]["reply_to_message"]["from"]["username"].startswith("Henrythe")):
-                    respondToMention(i["message"]["text"], i["message"]["chat"]["id"], i["message"]["message_id"])
+                    triggerPrompt = ""
+
+                    if "reply_to_message" in i["message"]:
+                        triggerPrompt = "Speaker 1: " + i["message"]["reply_to_message"]["text"] + "\nSpeaker 2: " + i["message"]["text"] + "\n"
+                    else:
+                        triggerPrompt = "Speaker 1: " + i["message"]["text"]
+
+                    respondToMention(triggerPrompt, i["message"]["chat"]["id"], i["message"]["message_id"])
 
             # if an any-case match was found for one of henry's commands, and he hasn't already, tell him to respond
             for k in henryCommands:
                 commandFound = False
 
-                if (k in i["message"]["text"] or k.lower() in i["message"]["text"] or k.upper() in i["message"]["text"]):
+                if "text" in i["message"] and anyCaseMatch(k, i["message"]["text"]):
                     commandFound = True
 
-                if (commandFound and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]):
+                if commandFound and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]:
                     sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], henryCommands[k])
 
             # if an any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
             for j in triggerMessages:
                 triggerFound = False
 
-                if (j in i["message"]["text"] or j.lower() in i["message"]["text"] or j.upper() in i["message"]["text"]):
+                if "text" in i["message"] and anyCaseMatch(j, i["message"]["text"]):
                     triggerFound = True
 
-                if (triggerFound and isSentence(i["message"]["text"]) and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]):
+                if triggerFound and isSentence(i["message"]["text"]) and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]:
                     triggerPrompt = ""
 
                     # if the matching message happens to be a reply itself, try to get thread context
                     if "reply_to_message" in i["message"]:
-                        triggerPrompt = assembleReplyThreadPrompt(i["message"]["reply_to_message"]["message_id"], i["message"]["text"], response)
+                        triggerPrompt = "Speaker 1: " + i["message"]["reply_to_message"]["text"] + "\nSpeaker 2: " + i["message"]["text"] + "\n"
                     else:
                         triggerPrompt = "Speaker 1: " + i["message"]["text"]
 
@@ -103,28 +110,6 @@ def respondToMention(toMessage, chatID, messageID):
 
     if existingChats[chatID] != mess and mess != "":
         sendResponse(chatID, messageID, mess)
-
-# reply thread awareness
-def assembleReplyThreadPrompt(startingWithMessageID, triggerMessage, updatesJSON):
-    # where to start looking, when to stop, limit counter, and result
-    tempMessageID = startingWithMessageID
-    speakerNumber = 1
-    finalPrompt = ""
-
-    # construct a prompt with the list of speakers
-    for i in updatesJSON:
-        if "message_id" in i["message"] and i["message"]["message_id"] == tempMessageID:
-            if "reply_to_message" in i["message"]:
-                finalPrompt += "Speaker " + str(speakerNumber) + ": " + i["message"]["reply_to_message"]["text"] + "\n"
-                speakerNumber += 1
-
-            finalPrompt += "Speaker " + str(speakerNumber) + ": " + i["message"]["text"] + "\n"
-
-    finalPrompt += "Speaker " + str(speakerNumber + 1) + ": " + triggerMessage + "\n"
-
-    # logging.info(finalPrompt)
-
-    return finalPrompt
 
 # fetch existing chats_ids from aws
 def getExistingChatInformation():
@@ -163,7 +148,17 @@ def isGroupChat(chatID):
 
 # determine if string is a sentence
 def isSentence(s):
-  return len(s.split()) > 1
+    return len(s.split()) > 1
+
+# determine whether we're flooding a single chat or not
+def isFloodingChat(chatID):
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID: return True
+    else: return False
+
+# determine if parse string has any-case match
+def anyCaseMatch(match, parse):
+    if match in parse or match.lower() in parse or match.upper() in parse: return True
+    else: return False
 
 # artificial seasoning
 def spice(message, isReply, optionalPrompt):
@@ -171,14 +166,13 @@ def spice(message, isReply, optionalPrompt):
     mess = "mess"
     r = random.randint(1, 10)
 
-    # only reply 70% of the time Henry gets triggered
-    if isReply == False and r > 7:
+    # only reply 60% of the time Henry gets triggered
+    if isReply == False and r > 6 and not anyCaseMatch("Henry", message):
         mess = ""
 
     if mess != "":
         # if no specific prompt was provided, choose a random one
-        if optionalPrompt == "":
-            optionalPrompt = defaultPrompt
+        if optionalPrompt == "": optionalPrompt = defaultPrompt
 
         try:
             # season the prompt
@@ -192,12 +186,16 @@ def spice(message, isReply, optionalPrompt):
               presence_penalty = 0.9,
             )
 
-            # for the memes
-            mess = response.choices[0].text.strip().replace("ors", "ooors")
+            mess = response.choices[0].text.strip()
+
             # clean up the presentation
-            mess = mess.replace("Henry the Hypemachine:", "")
-            mess = mess.replace("Speaker 2:", "")
-            mess = mess.replace("Speaker 2,", "")
+            mapping = [ ("Henry the Hypemachine:", ""), ("?\"", ""),
+                        ("Speaker 1:", ""), ("Speaker 2:", ""),
+                        ("Speaker 1,", ""), ("Speaker 2,", ""),
+                        ("ors", "ooors")]
+
+            for k, v in mapping:
+                mess = mess.replace(k, v)
 
             if mess[0] == '"' or mess[0] == "'": mess = mess[1:]
             if mess[-1] == '"' or mess[-1] == "'": mess = mess[:-1]
@@ -214,11 +212,11 @@ def triggerResponse(toMessage, chatID, messageID):
     mess = ""
 
     # prevent flooding an individual chat in production
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID):
         sendIt = False
     else:
         # season henry's output with cyborg stock
-        mess = spice(toMessage, True, "")
+        mess = spice(toMessage, False, "")
 
     if existingChats[chatID] != mess and mess != "" and sendIt:
         sendResponse(chatID, messageID, mess)
@@ -229,7 +227,7 @@ def sendRandomMessage(shouldSend):
     mess = ""
 
     # prevent flooding an individual chat
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID):
         shouldSend = False
     else:
         mess = spice(random.choice(randomMessages), False, "")
@@ -263,8 +261,6 @@ def sendResponse(chatID, messageID, message):
         url = "https://api.telegram.org/" + telegramAPIKey + "/sendMessage?chat_id=" + cid + "&reply_to_message_id=" + mid + "&text=" + message
         x = requests.post(url, json={})
 
-        time.sleep(10) #prevent api blacklisting
-
         # update local and database lists with new messageID
         replies = existingReplies[cid]
         replies.append(messageID)
@@ -274,7 +270,37 @@ def sendResponse(chatID, messageID, message):
         lastChatIDs.pop(0)
         lastChatIDs.append(chatID)
 
+        time.sleep(2)
+
+        # send a sticker 20% of the time
+        r = random.randint(1, 10)
+
+        if r < 3:
+            sendSticker(chatID, messageID, random.choice(list(stickerIDs)))
+
         logging.info("Henry had some words to say in Chat " + cid + ": " + message)
+    except requests.exceptions.HTTPError as err:
+        logging.info("Henry was met with a closed door: " + err)
+
+def sendSticker(chatID, messageID, stickerID):
+    cid = str(chatID)
+    mid = str(messageID)
+    sid = str(stickerID)
+
+    try:
+        url = "https://api.telegram.org/" + telegramAPIKey + "/sendSticker?chat_id=" + cid + "&sticker=" + sid
+        x = requests.post(url, json={})
+
+        # update local and database lists with new messageID
+        replies = existingReplies[cid]
+        replies.append(messageID)
+
+        updateDatabase(chatID, replies, sid)
+
+        lastChatIDs.pop(0)
+        lastChatIDs.append(chatID)
+
+        logging.info("Henry sent a sticker to Chat " + cid + ": " + sid)
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
 
@@ -307,10 +333,7 @@ if __name__ == "__main__":
 
     chatCount = len(list(existingChats))
     runningTime, lastMessageTime, oneDaysTime = 0, 0, 86400
-    waitTime, checkTime = 10, 30
-
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY'):
-        checkTime = 20
+    waitTime, checkTime = 10, 15
 
     if chatCount < (oneDaysTime / 10):
         waitTime = oneDaysTime / chatCount
