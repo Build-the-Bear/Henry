@@ -31,16 +31,18 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 dynamodb = boto3.resource("dynamodb", aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID"),
                                   aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"), region_name = "us-east-2")
 chatInfo = dynamodb.Table('chat_info')
-# chatInfo = dynamodb.Table("henry_test_chat_information")
+
+if telegramAPIKey == os.getenv('DEV_TELEGRAM_API_KEY'):
+    chatInfo = dynamodb.Table("henry_test_chat_information")
+
+# designate log location
+logging.basicConfig(filename="henry.log", level=logging.INFO)
 
 # define environment variables
 lastUpdateID = -1  # offset response from getTelegramUpdates
 lastChatIDs = [0, 0, 0]  # chat IDs for the last few messages, to prevent flooding
 existingChats = {}  # e.g. {-1001640903207: "Last message sent"}
 existingReplies = {}  # e.g. {-1001640903207: [100, 250, 3000]}
-
-# designate log location
-logging.basicConfig(filename="henry.log", level=logging.INFO)
 
 # fetch recent updates from telegram
 def getTelegramUpdates():
@@ -51,10 +53,10 @@ def getTelegramUpdates():
     updates = requests.get(url)
     response = updates.json()["result"]
 
-    # logging.info(response)
-
     if len(response):
         lastUpdateID = response[len(response) - 1]["update_id"]
+
+    # logging.info(response)
 
     # check new messages
     for i in response:
@@ -65,16 +67,14 @@ def getTelegramUpdates():
             if ("reply_to_message" in i["message"] and isSentence(i["message"]["text"]) and
                 "username" in i["message"]["reply_to_message"]["from"] and
                 i["message"]["reply_to_message"]["from"]["username"].startswith("Henrythe")):
-                    triggerPrompt = ""
+                    triggerPrompt = i["message"]["from"]["username"] + ": " + i["message"]["text"] + "\n"
 
-                    if "reply_to_message" in i["message"]:
-                        triggerPrompt = "Speaker 1: " + i["message"]["reply_to_message"]["text"] + "\nSpeaker 2: " + i["message"]["text"] + "\n"
-                    else:
-                        triggerPrompt = "Speaker 1: " + i["message"]["text"]
+                    if "text" in i["message"]["reply_to_message"]:
+                        triggerPrompt = "Henry the Hypemachine: " + i["message"]["reply_to_message"]["text"] + "\n" + i["message"]["from"]["username"] + ": " + i["message"]["text"] + "\n"
 
                     respondToMention(triggerPrompt, i["message"]["chat"]["id"], i["message"]["message_id"])
 
-            # if an any-case match was found for one of henry's commands, and he hasn't already, tell him to respond
+            # if an any-case match was found for one of henry's commands, and he hasn't already, respond
             for k in henryCommands:
                 commandFound = False
 
@@ -84,7 +84,7 @@ def getTelegramUpdates():
                 if commandFound and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]:
                     sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], henryCommands[k])
 
-            # if an any-case match was found for one of henry's triggers, and he hasn't already, tell him to respond
+            # if an any-case match was found for one of henry's triggers, and he hasn't already, respond
             for j in triggerMessages:
                 triggerFound = False
 
@@ -94,22 +94,13 @@ def getTelegramUpdates():
                 if triggerFound and isSentence(i["message"]["text"]) and i["message"]["message_id"] not in existingReplies[str(i["message"]["chat"]["id"])]:
                     triggerPrompt = ""
 
-                    # if the matching message happens to be a reply itself, try to get thread context
+                    # if the matching message happens to be a reply itself, get thread context
                     if "reply_to_message" in i["message"]:
-                        triggerPrompt = "Speaker 1: " + i["message"]["reply_to_message"]["text"] + "\nSpeaker 2: " + i["message"]["text"] + "\n"
+                        triggerPrompt = i["message"]["reply_to_message"]["from"]["username"] + ": " + i["message"]["reply_to_message"]["text"] + "\n" + i["message"]["from"]["username"] + ": " + i["message"]["text"] + "\n"
                     else:
-                        triggerPrompt = "Speaker 1: " + i["message"]["text"]
+                        triggerPrompt = i["message"]["from"]["username"] + ": " + i["message"]["text"]
 
                     triggerResponse(triggerPrompt, i["message"]["chat"]["id"], i["message"]["message_id"])
-
-# respond to direct mentions
-def respondToMention(toMessage, chatID, messageID):
-    cid = str(chatID)
-    # season henry's output with cyborg stock
-    mess = spice(toMessage, True, "")
-
-    if existingChats[chatID] != mess and mess != "":
-        sendResponse(chatID, messageID, mess)
 
 # fetch existing chats_ids from aws
 def getExistingChatInformation():
@@ -189,10 +180,7 @@ def spice(message, isReply, optionalPrompt):
             mess = response.choices[0].text.strip()
 
             # clean up the presentation
-            mapping = [ ("Henry the Hypemachine:", ""), ("?\"", ""),
-                        ("Speaker 1:", ""), ("Speaker 2:", ""),
-                        ("Speaker 1,", ""), ("Speaker 2,", ""),
-                        ("ors", "ooors")]
+            mapping = [ ("Henry the Hypemachine:", ""), ("?\"", ""), ("ors", "ooors")]
 
             for k, v in mapping:
                 mess = mess.replace(k, v)
@@ -202,9 +190,16 @@ def spice(message, isReply, optionalPrompt):
         except requests.exceptions.HTTPError as err:
             logging.info("Henry couldn't figure out how to open the door: " + err)
 
-        # logging.info(mess)
-
     return mess.strip()
+
+# respond to direct mentions
+def respondToMention(toMessage, chatID, messageID):
+    cid = str(chatID)
+
+    mess = spice(toMessage, True, "")
+
+    if existingChats[chatID] != mess and mess != "":
+        sendResponse(chatID, messageID, mess)
 
 # trigger unique responses by keyword
 def triggerResponse(toMessage, chatID, messageID):
@@ -215,9 +210,9 @@ def triggerResponse(toMessage, chatID, messageID):
     if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID):
         sendIt = False
     else:
-        # season henry's output with cyborg stock
         mess = spice(toMessage, False, "")
 
+    # if the message was constructed and should be sent
     if existingChats[chatID] != mess and mess != "" and sendIt:
         sendResponse(chatID, messageID, mess)
 
@@ -226,7 +221,7 @@ def sendRandomMessage(shouldSend):
     chatID = random.choice(list(existingChats))
     mess = ""
 
-    # prevent flooding an individual chat
+    # prevent flooding an individual chat in production
     if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID):
         shouldSend = False
     else:
@@ -272,35 +267,18 @@ def sendResponse(chatID, messageID, message):
 
         time.sleep(2)
 
-        # send a sticker 20% of the time
+        logging.info("Henry had some words to say in Chat " + cid + ": " + message)
+
+        # send a random BtB sticker 20% of the time
         r = random.randint(1, 10)
 
         if r < 3:
-            sendSticker(chatID, messageID, random.choice(list(stickerIDs)))
+            stickerID = random.choice(list(stickerIDs))
 
-        logging.info("Henry had some words to say in Chat " + cid + ": " + message)
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry was met with a closed door: " + err)
+            url = "https://api.telegram.org/" + telegramAPIKey + "/sendSticker?chat_id=" + str(chatID) + "&sticker=" + stickerID
+            x = requests.post(url, json={})
 
-def sendSticker(chatID, messageID, stickerID):
-    cid = str(chatID)
-    mid = str(messageID)
-    sid = str(stickerID)
-
-    try:
-        url = "https://api.telegram.org/" + telegramAPIKey + "/sendSticker?chat_id=" + cid + "&sticker=" + sid
-        x = requests.post(url, json={})
-
-        # update local and database lists with new messageID
-        replies = existingReplies[cid]
-        replies.append(messageID)
-
-        updateDatabase(chatID, replies, sid)
-
-        lastChatIDs.pop(0)
-        lastChatIDs.append(chatID)
-
-        logging.info("Henry sent a sticker to Chat " + cid + ": " + sid)
+            logging.info("Henry sent a sticker to Chat " + cid + ": " + stickerID)
     except requests.exceptions.HTTPError as err:
         logging.info("Henry was met with a closed door: " + err)
 

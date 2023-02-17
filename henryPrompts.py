@@ -1,4 +1,4 @@
-ahenryCommands = {
+henryCommands = {
     "/start": "Simply add me as an admin in your chat",
     "/about": "Henry the Hypemachine is an open-source project brought to you by *Build the Bear*! Simply add him as an admin in your chat to get started.\n\nIf you'd to contribute or take a peek under the hood, check him out on GitHub: github.com/buildingthebear/henry\n\n*Keep up with us - @buildingthebear on most platforms or at www.buildthebear.market*",
     "/marketing": "Please DM me with your marketing proposal(s).\nI shall ensure swift delivery to the appropriate party. 👹",
