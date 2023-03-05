@@ -14,6 +14,7 @@ import openai
 import boto3
 import math
 import time
+import time
 import ast
 import os
 
@@ -45,6 +46,9 @@ lastChatIDs = [0, 0, 0]  # chat IDs for the last few messages, to prevent floodi
 existingChats = {}  # e.g. {"-1001640903207": "Last message sent"}
 existingReplies = {}  # e.g. {"-1001640903207": [100, 250, 3000]}
 existingSettings = {}  # e.g. {"-1001640903207": {"toggleMentions":"on", "toggleReplies":"on", "toggleRandomMessages":"on", "toggleStickers":"on"}}
+
+lastPriceCheck = time.time()
+lastPriceMessage = ""
 
 # fetch recent updates from telegram
 def getTelegramUpdates(startup):
@@ -92,6 +96,9 @@ def getTelegramUpdates(startup):
                             toggleSetting(i["message"]["chat"]["id"], i["message"]["message_id"], c, cc.strip().lower())
                         else:
                             sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], "I don't take orders from you")
+
+                    if commandFound and haveNotReplied and "prices" in c:
+                        sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], checkPrices(lastPriceMessage))
 
                     if commandFound and haveNotReplied and "toggle" not in c:
                         sendResponse(i["message"]["chat"]["id"], i["message"]["message_id"], henryCommands[c])
@@ -216,7 +223,7 @@ def spice(message, isReply, optionalPrompt):
             mess = response.choices[0].text.strip()
 
             # clean up the presentation
-            mapping = [ ("Henry the Hypemachine:", ""), ("HenrytheHypemachine:", ""), ("'HenrytheHypemachine':", ""), ("Henry:", ""), ("HenrytheHypeBot:", ""), ("?\"", ""), ("ors", "ooors")]
+            mapping = [ ("Henry the Hypemachine:", ""), ("HenrytheHypemachine:", ""), ("'HenrytheHypemachine':", ""), ("Henry:", ""), ("HenrytheHypeBot:", ""), ("Henry the Hypemachine responds:", ""), ("?\"", ""), ("ors", "ooors")]
 
             for k, v in mapping:
                 mess = mess.replace(k, v)
@@ -368,6 +375,31 @@ def checkSetting(chatID, setting):
     if setting in existingSettings[chatID]:
         return existingSettings[chatID][setting]
     else: return "on"
+
+# check market prices
+def checkPrices(lastPriceMessage):
+    currentPriceMessage = spice("Please check the market prices, Henry.", True, "")
+    currentPrice = 0
+
+    if (time.time() - lastPriceCheck > 59) or lastPriceMessage == "":
+        currentPriceMessage += "\n\n▔▔▔▔▔▔▔▔▔▔"
+
+        try:
+            url = 'https://api.binance.us/api/v3/ticker?symbols=["BTCUSDT","ETHUSDT","BNBUSDT"]'
+            updates = requests.get(url)
+            response = updates.json()
+
+            logging.info(response)
+
+            for i in response:
+                currentPrice = "{:.2f}".format(float(i["lastPrice"]))
+                currentPriceMessage += "\n" + i["symbol"][:3] + "   ➤   $" + str(currentPrice)
+        except requests.exceptions.HTTPError as err:
+            logging.info("Henry was met with a closed door: " + err)
+
+        lastPriceMessage = currentPriceMessage
+
+    return currentPriceMessage
 
 # initialize
 if __name__ == "__main__":
