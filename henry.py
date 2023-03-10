@@ -170,6 +170,7 @@ def isSentence(s):
 def checkFlood(chatID):
     if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
         temporarilyIgnoredChatID = chatID
+    else: temporarilyIgnoredChatID = 0
 
 # determine whether a given message has been replied to or not
 def haveNotReplied(chatID, messageID):
