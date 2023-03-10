@@ -46,6 +46,7 @@ lastChatIDs = [0, 0, 0]  # chat IDs for the last few messages, to prevent floodi
 existingChats = {}  # e.g. {"-1001640903207": "Last message sent"}
 existingReplies = {}  # e.g. {"-1001640903207": [100, 250, 3000]}
 existingSettings = {}  # e.g. {"-1001640903207": {"toggleMentions":"on", "toggleReplies":"on", "toggleRandomMessages":"on", "toggleStickers":"on"}}
+temporarilyIgnoredChatID = 0
 
 lastPriceCheck = time.time()
 lastPriceMessage = ""
@@ -166,9 +167,9 @@ def isSentence(s):
     return len(s.split()) > 1
 
 # determine whether we're flooding a single chat or not
-def isFloodingChat(chatID):
-    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID: return True
-    else: return False
+def checkFlood(chatID):
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+        temporarilyIgnoredChatID = chatID
 
 # determine whether a given message has been replied to or not
 def haveNotReplied(chatID, messageID):
@@ -251,15 +252,17 @@ def triggerResponse(toMessage, chatID, messageID):
     sendIt = True
     mess = ""
 
+    checkFlood(chatID)
+
     # prevent flooding an individual chat in production
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID) and not anyCaseMatch("Henry", toMessage):
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and not anyCaseMatch("Henry", toMessage):
         sendIt = False
     else:
         if checkSetting(chatID, "/toggleReplies") != "off":
             mess = spice(toMessage, False, "")
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "" and sendIt:
+    if existingChats[chatID] != mess and mess != "" and temporarilyIgnoredChatID != chatID and sendIt:
         sendResponse(chatID, messageID, mess)
 
 # trigger random responses
@@ -267,8 +270,10 @@ def sendRandomMessage(shouldSend):
     chatID = random.choice(list(existingChats))
     mess = ""
 
+    checkFlood(chatID)
+
     # prevent flooding an individual chat in production
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and isFloodingChat(chatID):
+    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY'):
         shouldSend = False
     else:
         if checkSetting(chatID, "/toggleRandomMessages") != "off":
@@ -278,7 +283,7 @@ def sendRandomMessage(shouldSend):
             chatID = random.choice(list(existingChats))
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "" and shouldSend:
+    if existingChats[chatID] != mess and mess != "" and shouldSend and temporarilyIgnoredChatID != chatID:
         try:
             url = "https://api.telegram.org/" + telegramAPIKey + "/sendMessage?chat_id=" + str(chatID) + "&text=" + mess
             x = requests.post(url, json={})
