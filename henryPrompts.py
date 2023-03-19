@@ -1,6 +1,6 @@
 henryCommands = {
     "/start": "Just add me as an admin in your chat and use the /settings command to configure",
-    "/about": "Henry the Hypemachine is an open-source project brought to you by Build the Bear! Just add him as an admin in your chat to get started.\n\nIf you'd to contribute or take a peek under the hood, check him out on GitHub: github.com/buildingthebear/henry\n\nKeep up with us - @buildingthebear on most platforms or at www.buildthebear.market",
+    "/about": "Henry the Hypemachine is an open-source project brought to you by Build the Bear! Just add him as an admin in your chat to get started.\n\nIf you'd like to contribute or take a peek under the hood, check him out on GitHub: github.com/buildingthebear/henry\n\nKeep up with us - @buildingthebear on most platforms or at www.buildthebear.market",
     "/marketing": "Please DM me with your marketing proposal(s).\nI shall ensure swift delivery to the appropriate party. 👹",
     "/settings": "I'll respond to the following chat settings:\n\n/toggleReplies on | off\n/toggleMentions on | off\n/toggleStickers on | off\n/toggleRandomMessages on | off",
     "/prices": "",

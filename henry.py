@@ -242,8 +242,8 @@ def spice(message, isReply, optionalPrompt):
             )
 
             mess = response.choices[0].text.strip()
-        except requests.exceptions.HTTPError as err:
-            logging.info("Henry couldn't figure out how to open the door: " + err)
+        except:
+            logging.info("Henry couldn't figure out how to open the door, someone changed the lock")
 
         # clean up the presentation
         mapping = [ ("Henry the Hypemachine:", ""),
@@ -272,7 +272,7 @@ def respondToMention(toMessage, chatID, messageID):
     if checkSetting(chatID, "/toggleMentions") != "off":
         mess = spice(toMessage, True, "")
 
-    if existingChats[chatID] != mess and mess != "":
+    if existingChats[chatID] != mess and mess != "" and mess != "mess":
         sendResponse(chatID, messageID, mess)
 
 # trigger unique responses by keyword
@@ -285,7 +285,7 @@ def triggerResponse(toMessage, chatID, messageID):
         mess = spice(toMessage, False, "")
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "":
+    if existingChats[chatID] != mess and mess != "" and mess != "mess":
         sendResponse(chatID, messageID, mess)
 
 # trigger random responses
@@ -302,7 +302,7 @@ def sendRandomMessage(shouldSend):
         chatID = random.choice(list(existingChats))
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "":
+    if existingChats[chatID] != mess and mess != "" and mess != "mess":
         try:
             url = "https://api.telegram.org/" + telegramAPIKey + "/sendMessage?chat_id=" + str(chatID) + "&text=" + mess
             x = requests.post(url, json={})
