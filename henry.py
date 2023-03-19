@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv("./.env")
 
 # set up API keys
-telegramAPIKey = os.getenv("DEV_TELEGRAM_API_KEY")
+telegramAPIKey = os.getenv("PROD_TELEGRAM_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # connect to dynamodb on aws
@@ -184,7 +184,6 @@ def checkFlood(chatID, timeIgnored):
         timeIgnored = time.time()
 
     if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
-        logging.info("temporarily IGNORING chat id")
         temporarilyIgnoredChatID = chatID
     else: temporarilyIgnoredChatID = 0
 
@@ -280,8 +279,6 @@ def respondToMention(toMessage, chatID, messageID):
 def triggerResponse(toMessage, chatID, messageID):
     mess = ""
 
-    logging.info("current chat id")
-    logging.info(chatID)
     floodedChatID = checkFlood(chatID, timeIgnored)
 
     if checkSetting(chatID, "/toggleReplies") != "off" and chatID != floodedChatID:
@@ -289,9 +286,6 @@ def triggerResponse(toMessage, chatID, messageID):
 
     # if the message was constructed and should be sent
     if existingChats[chatID] != mess and mess != "":
-        logging.info("temporarilyIgnoredChatID not equal to chat ID")
-        logging.info(temporarilyIgnoredChatID)
-        logging.info(chatID)
         sendResponse(chatID, messageID, mess)
 
 # trigger random responses
