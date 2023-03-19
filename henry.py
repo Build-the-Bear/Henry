@@ -73,9 +73,8 @@ def getTelegramUpdates(startup):
     # check new messages
     if not startup:
         for i in response:
-            mes = i["message"]
-
-            if "message" in i and "text" in mes:
+            if "message" in i and "text" in i["message"]:
+                mes = i["message"]
                 fro = mes["from"]["username"]
                 mid = mes["message_id"]
                 cid = mes["chat"]["id"]
