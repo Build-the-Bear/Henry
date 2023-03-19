@@ -43,7 +43,7 @@ logging.basicConfig(filename="henry.log", level=logging.INFO)
 
 # define environment variables
 lastUpdateID = -1  # offset response from getTelegramUpdates
-lastChatIDs = [0, 0, 0]  # chat IDs for the last few messages, to prevent flooding
+lastChatIDs = [1, 2, 3]  # chat IDs for the last few messages, to prevent flooding
 
 existingChats = {}  # e.g. {"-1001640903207": "Last message sent"}
 existingReplies = {}  # e.g. {"-1001640903207": [100, 250, 3000 . . .
@@ -184,9 +184,11 @@ def checkFlood(chatID, timeIgnored):
         timeIgnored = time.time()
 
     if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+        logging.info("temporarily IGNORING chat id")
         temporarilyIgnoredChatID = chatID
-
     else: temporarilyIgnoredChatID = 0
+
+    return temporarilyIgnoredChatID
 
 # determine whether a given message has been replied to or not
 def haveNotReplied(chatID, messageID):
@@ -276,20 +278,20 @@ def respondToMention(toMessage, chatID, messageID):
 
 # trigger unique responses by keyword
 def triggerResponse(toMessage, chatID, messageID):
-    sendIt = True
     mess = ""
 
-    checkFlood(chatID, timeIgnored)
+    logging.info("current chat id")
+    logging.info(chatID)
+    floodedChatID = checkFlood(chatID, timeIgnored)
 
-    # prevent flooding an individual chat in production
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY') and not anyCaseMatch("Henry", toMessage):
-        sendIt = False
-    else:
-        if checkSetting(chatID, "/toggleReplies") != "off":
-            mess = spice(toMessage, False, "")
+    if checkSetting(chatID, "/toggleReplies") != "off" and chatID != floodedChatID:
+        mess = spice(toMessage, False, "")
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "" and temporarilyIgnoredChatID != chatID and sendIt:
+    if existingChats[chatID] != mess and mess != "":
+        logging.info("temporarilyIgnoredChatID not equal to chat ID")
+        logging.info(temporarilyIgnoredChatID)
+        logging.info(chatID)
         sendResponse(chatID, messageID, mess)
 
 # trigger random responses
@@ -297,20 +299,16 @@ def sendRandomMessage(shouldSend):
     chatID = random.choice(list(existingChats))
     mess = ""
 
-    checkFlood(chatID, timeIgnored)
+    floodedChatID = checkFlood(chatID, timeIgnored)
 
-    # prevent flooding an individual chat in production
-    if telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY'):
-        shouldSend = False
-    else:
-        if checkSetting(chatID, "/toggleRandomMessages") != "off":
-            mess = spice(random.choice(randomMessages), False, "")
+    if checkSetting(chatID, "/toggleRandomMessages") != "off" and chatID != floodedChatID:
+        mess = spice(random.choice(randomMessages), False, "")
 
-        while isGroupChat(chatID) != True and mess != "":
-            chatID = random.choice(list(existingChats))
+    while isGroupChat(chatID) != True:
+        chatID = random.choice(list(existingChats))
 
     # if the message was constructed and should be sent
-    if existingChats[chatID] != mess and mess != "" and shouldSend and temporarilyIgnoredChatID != chatID:
+    if existingChats[chatID] != mess and mess != "":
         try:
             url = "https://api.telegram.org/" + telegramAPIKey + "/sendMessage?chat_id=" + str(chatID) + "&text=" + mess
             x = requests.post(url, json={})
