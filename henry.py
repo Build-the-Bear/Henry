@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv("./.env")
 
 # set up API keys
-telegramAPIKey = os.getenv("PROD_TELEGRAM_API_KEY")
+telegramAPIKey = os.getenv("DEV_TELEGRAM_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # connect to dynamodb on aws
@@ -58,105 +58,114 @@ lastPriceMessage = ""
 
 # fetch recent updates from telegram
 def getTelegramUpdates(startup):
-    global lastUpdateID
+    try :
+        global lastUpdateID
 
-    # offset by last updates retrieved
-    url = "https://api.telegram.org/" + telegramAPIKey + "/getupdates?offset=" + str(lastUpdateID + 1)
-    updates = requests.get(url)
-    response = updates.json()["result"]
+        # offset by last updates retrieved
+        url = "https://api.telegram.org/" + telegramAPIKey + "/getupdates?offset=" + str(lastUpdateID + 1)
+        updates = requests.get(url)
+        response = updates.json()["result"]
 
-    if len(response):
-        lastUpdateID = response[len(response) - 1]["update_id"]
+        if len(response):
+            lastUpdateID = response[len(response) - 1]["update_id"]
 
-    # logging.info(response)
+        # logging.info(response)
 
-    # check new messages
-    if not startup:
-        for i in response:
-            if "message" in i and "text" in i["message"]:
-                mes = i["message"]
-                fro = mes["from"]["username"]
-                mid = mes["message_id"]
-                cid = mes["chat"]["id"]
-                txt = mes["text"]
+        # check new messages
+        if not startup:
+            for i in response:
+                if "message" in i and "text" in i["message"]:
+                    mes = i["message"]
+                    fro = mes["from"]["username"]
+                    mid = mes["message_id"]
+                    cid = mes["chat"]["id"]
+                    txt = mes["text"]
 
-                checkForNewChatID(cid)
+                    checkForNewChatID(cid)
 
-                # respond to mentions with context
-                if ("reply_to_message" in mes and isSentence(txt) and
-                    "username" in mes["reply_to_message"]["from"] and
-                    mes["reply_to_message"]["from"]["username"].startswith("Henrythe")) and haveNotReplied(cid, mid):
-                        triggerPrompt = fro + ": " + txt + "\n"
+                    # respond to mentions with context
+                    if ("reply_to_message" in mes and isSentence(txt) and
+                        "username" in mes["reply_to_message"]["from"] and
+                        mes["reply_to_message"]["from"]["username"].startswith("Henrythe")) and haveNotReplied(cid, mid):
+                            triggerPrompt = fro + ": " + txt + "\n"
 
-                        if "text" in mes["reply_to_message"]:
-                            triggerPrompt = "Henry the Hypemachine: " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
+                            if "text" in mes["reply_to_message"]:
+                                triggerPrompt = "Henry the Hypemachine: " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
 
-                        respondToMention(triggerPrompt, cid, mid)
+                            respondToMention(triggerPrompt, cid, mid)
 
-                # if an any-case match was found for one of henry's commands, and he hasn't already, respond
-                for c in henryCommands:
-                    commandFound = False
+                    # if an any-case match was found for one of henry's commands, and he hasn't already, respond
+                    for c in henryCommands:
+                        commandFound = False
 
-                    if "text" in mes and anyCaseMatch(c, txt):
-                        commandFound = True
+                        if "text" in mes and anyCaseMatch(c, txt):
+                            commandFound = True
 
-                    # check if command requires administrator rights
-                    if commandFound and haveNotReplied(cid, mid) and "toggle" in c:
-                        if fromAdmin(str(cid), str(mes["from"]["id"])):
-                            cc = txt.replace(c, "")
+                        # check if command requires administrator rights
+                        if commandFound and haveNotReplied(cid, mid) and "toggle" in c:
+                            if fromAdmin(str(cid), str(mes["from"]["id"])):
+                                cc = txt.replace(c, "")
 
-                            toggleSetting(cid, mid, c, cc.strip().lower())
-                        else:
-                            sendResponse(cid, mid, "I don't take orders from you")
+                                toggleSetting(cid, mid, c, cc.strip().lower())
+                            else:
+                                sendResponse(cid, mid, "I don't take orders from you")
 
-                    if commandFound and haveNotReplied(cid, mid) and "prices" in c:
-                        sendResponse(cid, mid, checkPrices(lastPriceMessage))
+                        if commandFound and haveNotReplied(cid, mid) and "prices" in c:
+                            sendResponse(cid, mid, checkPrices(lastPriceMessage))
 
-                    if commandFound and haveNotReplied(cid, mid) and "toggle" not in c:
-                        sendResponse(cid, mid, henryCommands[c])
+                        if commandFound and haveNotReplied(cid, mid) and "toggle" not in c:
+                            sendResponse(cid, mid, henryCommands[c])
 
-                # if an any-case match was found for one of henry's triggers, and he hasn't already, respond
-                for t in triggerMessages:
-                    triggerFound = False
+                    # if an any-case match was found for one of henry's triggers, and he hasn't already, respond
+                    for t in triggerMessages:
+                        triggerFound = False
 
-                    if "text" in mes and anyCaseMatch(t, txt):
-                        triggerFound = True
+                        if "text" in mes and anyCaseMatch(t, txt):
+                            triggerFound = True
 
-                    if triggerFound and isSentence(txt) and haveNotReplied(cid, mid):
-                        triggerPrompt = ""
+                        if triggerFound and isSentence(txt) and haveNotReplied(cid, mid):
+                            triggerPrompt = ""
 
-                        # if the matching message happens to be a reply itself, get thread context
-                        if "reply_to_message" in mes:
-                            triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
-                        else:
-                            triggerPrompt = fro + ": " + txt
+                            # if the matching message happens to be a reply itself, get thread context
+                            if "reply_to_message" in mes:
+                                triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
+                            else:
+                                triggerPrompt = fro + ": " + txt
 
-                        triggerResponse(triggerPrompt, cid, mid)
+                            triggerResponse(triggerPrompt, cid, mid)
+    except:
+        logging.info("Henry couldn't get updates from telegram")
 
 # fetch existing chats_ids from aws
 def getExistingChatInformation():
-    response = chatInfo.scan()
+    try:
+        response = chatInfo.scan()
 
-    for i in response["Items"]:
-        if "last_reply" in i and i["last_reply"] is not None:
-            existingChats[i["chat_id"]] = i["last_reply"]
-        else:
-            existingChats[i["chat_id"]] = ""
+        for i in response["Items"]:
+            if "last_reply" in i and i["last_reply"] is not None:
+                existingChats[i["chat_id"]] = i["last_reply"]
+            else:
+                existingChats[i["chat_id"]] = ""
 
-        if "chat_settings" in i and i["chat_settings"] is not None:
-            existingSettings[i["chat_id"]] = i["chat_settings"]
-        else:
-            existingSettings[i["chat_id"]] = {}
+            if "chat_settings" in i and i["chat_settings"] is not None:
+                existingSettings[i["chat_id"]] = i["chat_settings"]
+            else:
+                existingSettings[i["chat_id"]] = {}
 
-        existingReplies[str(i["chat_id"])] = ast.literal_eval(i["chat_replies"])
+            existingReplies[str(i["chat_id"])] = ast.literal_eval(i["chat_replies"])
+    except:
+        logging.info("Henry couldn't fetch existing chat information")
 
 # save new chat information
 def checkForNewChatID(chatID):
-    if chatID not in existingChats:
-        existingChats[chatID] = ""
-        existingReplies[str(chatID)] = [0, 1]
+    try:
+        if chatID not in existingChats:
+            existingChats[chatID] = ""
+            existingReplies[str(chatID)] = [0, 1]
 
-        chatInfo.put_item(Item={"chat_id": chatID, "chat_replies": str([0, 1]), "chat_settings": {}})
+            chatInfo.put_item(Item={"chat_id": chatID, "chat_replies": str([0, 1]), "chat_settings": {}})
+    except:
+        logging.info("Henry couldn't figure out if he was in a new chat or not")
 
 # determine if chat is a group chat
 def isGroupChat(chatID):
@@ -171,7 +180,7 @@ def isGroupChat(chatID):
         if type != "private": return True
         else: return False
     except requests.exceptions.HTTPError as err:
-        logging.info("Henry was met with a closed door: " + err)
+        logging.info("Henry couldn't figure out whether or not he was in a group chat" + err)
 
 # determine if string is a sentence
 def isSentence(s):
@@ -183,7 +192,7 @@ def checkFlood(chatID, timeIgnored):
         temporarilyIgnoredChatID = 0
         timeIgnored = time.time()
 
-    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID:
+    if lastChatIDs[0] == chatID and lastChatIDs[1] == chatID and lastChatIDs[2] == chatID and telegramAPIKey == os.getenv('PROD_TELEGRAM_API_KEY'):
         temporarilyIgnoredChatID = chatID
     else: temporarilyIgnoredChatID = 0
 
@@ -277,6 +286,7 @@ def respondToMention(toMessage, chatID, messageID):
 
 # trigger unique responses by keyword
 def triggerResponse(toMessage, chatID, messageID):
+    logging.info("triggering response")
     mess = ""
 
     floodedChatID = checkFlood(chatID, timeIgnored)
@@ -286,7 +296,10 @@ def triggerResponse(toMessage, chatID, messageID):
 
     # if the message was constructed and should be sent
     if existingChats[chatID] != mess and mess != "" and mess != "mess":
+        logging.info("sending response...")
         sendResponse(chatID, messageID, mess)
+
+    logging.info("triggered response")
 
 # trigger random responses
 def sendRandomMessage(shouldSend):
