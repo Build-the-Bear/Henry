@@ -78,7 +78,6 @@ def getTelegramUpdates(startup):
             for i in response:
                 if "message" in i and "text" in i["message"]:
                     mes = i["message"]
-                    fro = mes["from"]["username"]
                     mid = mes["message_id"]
                     cid = mes["chat"]["id"]
                     txt = mes["text"]
@@ -87,12 +86,12 @@ def getTelegramUpdates(startup):
 
                     # respond to mentions with context
                     if ("reply_to_message" in mes and isSentence(txt) and
-                        "username" in mes["reply_to_message"]["from"] and
+                        "username" in mes["reply_to_message"]["from"] and "username" in mes["from"] and
                         mes["reply_to_message"]["from"]["username"].startswith("Henrythe")) and haveNotReplied(cid, mid):
-                            triggerPrompt = fro + ": " + txt + "\n"
+                            triggerPrompt = mes["from"]["username"] + ": " + txt + "\n"
 
                             if "text" in mes["reply_to_message"]:
-                                triggerPrompt = "Henry the Hypemachine: " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
+                                triggerPrompt = "Henry the Hypemachine: " + mes["reply_to_message"]["text"] + "\n" + mes["from"]["username"] + ": " + txt + "\n"
 
                             respondToMention(triggerPrompt, cid, mid)
 
@@ -129,10 +128,10 @@ def getTelegramUpdates(startup):
                             triggerPrompt = ""
 
                             # if the matching message happens to be a reply itself, get thread context
-                            if "reply_to_message" in mes:
-                                triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + fro + ": " + txt + "\n"
-                            else:
-                                triggerPrompt = fro + ": " + txt
+                            if "reply_to_message" in mes and "username" in mes["from"]:
+                                triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + mes["from"]["username"] + ": " + txt + "\n"
+                            else if "username" in mes["from"]:
+                                triggerPrompt = mes["from"]["username"] + ": " + txt
 
                             triggerResponse(triggerPrompt, cid, mid)
     except ValueError as err:
@@ -444,12 +443,14 @@ def checkPrices(lastPriceMessage):
 # check live token price of any erc-20 token by uniswap pair address (using 9 decimals for BTB tokenReserve)
 def getTokenUsdPrice(pairAddress):
     try:
+        # get ether price
         url = "https://api.etherscan.io/api?module=stats&action=ethprice&apikey=" + os.getenv("ETHERSCAN_API_KEY")
         response = requests.get(url)
         data = response.json()
 
         ethPrice = float(data["result"]["ethusd"])
 
+        # get uniswap pair reserves
         url = f"https://api.etherscan.io/api?module=proxy&action=eth_call&to={pairAddress}&data=0x0902f1ac&tag=latest&apikey=" + os.getenv("ETHERSCAN_API_KEY")
         response = requests.get(url)
         data = response.json()
@@ -459,6 +460,7 @@ def getTokenUsdPrice(pairAddress):
         tokenReserve_hex = result[:64]
         wethReserve_hex = result[64:128]
 
+        # calculate token price
         tokenReserve = int(tokenReserve_hex, 16) / (10 ** 9)
         wethReserve = int(wethReserve_hex, 16) / (10 ** 18)
 
