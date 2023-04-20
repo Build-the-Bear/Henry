@@ -19,6 +19,8 @@ import time
 import ast
 import os
 
+from web3 import Web3, HTTPProvider
+
 from henryPrompts import *
 from boto3.dynamodb.conditions import Key
 from dotenv import load_dotenv
@@ -133,8 +135,8 @@ def getTelegramUpdates(startup):
                                 triggerPrompt = fro + ": " + txt
 
                             triggerResponse(triggerPrompt, cid, mid)
-    except:
-        logging.info("Henry couldn't get updates from telegram")
+    except ValueError as err:
+        logging.info(err)
 
 # fetch existing chats_ids from aws
 def getExistingChatInformation():
@@ -241,13 +243,13 @@ def spice(message, isReply, optionalPrompt):
         try:
             # season the prompt
             response = openai.Completion.create(
-              model = "text-davinci-002",
-              prompt = optionalPrompt + "\n\n'" + message + "'",
-              temperature = 1.1,
-              max_tokens = 65,
-              top_p = 1,
-              frequency_penalty = 0.9,
-              presence_penalty = 0.9,
+                model = "text-davinci-003",
+                prompt = optionalPrompt + "\n\n'" + message + "'",
+                temperature = 1.1,
+                max_tokens = 65,
+                top_p = 1,
+                frequency_penalty = 0.9,
+                presence_penalty = 0.9,
             )
 
             mess = response.choices[0].text.strip()
@@ -286,7 +288,6 @@ def respondToMention(toMessage, chatID, messageID):
 
 # trigger unique responses by keyword
 def triggerResponse(toMessage, chatID, messageID):
-    logging.info("triggering response")
     mess = ""
 
     floodedChatID = checkFlood(chatID, timeIgnored)
@@ -296,10 +297,7 @@ def triggerResponse(toMessage, chatID, messageID):
 
     # if the message was constructed and should be sent
     if existingChats[chatID] != mess and mess != "" and mess != "mess":
-        logging.info("sending response...")
         sendResponse(chatID, messageID, mess)
-
-    logging.info("triggered response")
 
 # trigger random responses
 def sendRandomMessage(shouldSend):
@@ -430,17 +428,47 @@ def checkPrices(lastPriceMessage):
             updates = requests.get(url)
             response = updates.json()
 
-            # logging.info(response)
-
             for i in response:
                 currentPrice = "{:.2f}".format(float(i["lastPrice"]))
-                currentPriceMessage += "\n" + i["symbol"][:3] + "   ➤   $" + str(currentPrice)
+                currentPriceMessage += "\n" + i["symbol"][:3] + "    ➤   $" + str(currentPrice)
+
+            btbPrice = getTokenUsdPrice("0xe708fE7FCE0c3FcAc741E49a20439D79177753FA")
+            currentPriceMessage += "\nBTB   🐻   $" + str(btbPrice)
         except requests.exceptions.HTTPError as err:
             logging.info("Henry was met with a closed door: " + err)
 
         lastPriceMessage = currentPriceMessage
 
     return currentPriceMessage
+
+# check live token price of any erc-20 token by uniswap pair address (using 9 decimals for BTB tokenReserve)
+def getTokenUsdPrice(pairAddress):
+    try:
+        url = "https://api.etherscan.io/api?module=stats&action=ethprice&apikey=" + os.getenv("ETHERSCAN_API_KEY")
+        response = requests.get(url)
+        data = response.json()
+
+        ethPrice = float(data["result"]["ethusd"])
+
+        url = f"https://api.etherscan.io/api?module=proxy&action=eth_call&to={pairAddress}&data=0x0902f1ac&tag=latest&apikey=" + os.getenv("ETHERSCAN_API_KEY")
+        response = requests.get(url)
+        data = response.json()
+
+        result = data["result"][2:]
+
+        tokenReserve_hex = result[:64]
+        wethReserve_hex = result[64:128]
+
+        tokenReserve = int(tokenReserve_hex, 16) / (10 ** 9)
+        wethReserve = int(wethReserve_hex, 16) / (10 ** 18)
+
+        tokenEthPrice = wethReserve / tokenReserve
+
+        tokenUsdPrice = round(tokenEthPrice * ethPrice, 4)
+
+        return tokenUsdPrice
+    except ValueError as err:
+        logging.info(err)
 
 # initialize
 if __name__ == "__main__":
