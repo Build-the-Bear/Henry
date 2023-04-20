@@ -28,7 +28,7 @@ from henryPrompts import *
 load_dotenv("./.env")
 
 # set up API keys
-telegramAPIKey = os.getenv("DEV_TELEGRAM_API_KEY")
+telegramAPIKey = os.getenv("PROD_TELEGRAM_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # connect to dynamodb on aws
