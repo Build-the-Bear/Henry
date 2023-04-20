@@ -127,7 +127,7 @@ def getTelegramUpdates(startup):
                             triggerPrompt = ""
 
                             # if the matching message happens to be a reply itself, get thread context
-                            if "reply_to_message" in mes and "username" in mes["from"]:
+                            if "reply_to_message" in mes and "text" in mes["reply_to_message"] and "username" in mes["from"]:
                                 triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + mes["from"]["username"] + ": " + txt + "\n"
                             elif "username" in mes["from"]:
                                 triggerPrompt = mes["from"]["username"] + ": " + txt
