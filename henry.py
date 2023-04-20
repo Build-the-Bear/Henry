@@ -412,7 +412,7 @@ def toggleSetting(chatID, messageID, setting, value):
 
 # check settings for a given chat
 def checkSetting(chatID, setting):
-    if setting in existingSettings[chatID]:
+    if chatID in existingSettings and setting in existingSettings[chatID]:
         return existingSettings[chatID][setting]
     else: return "on"
 
