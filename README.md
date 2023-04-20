@@ -30,16 +30,19 @@ Hosted on AWS EC2 using DynamoDB, built with Python, OpenAI & Telegram Bot APIs
         cp .env.example .env
    ```
 
-5. Add your [OpenAI API key](https://beta.openai.com/account/api-keys) to the newly created `.env` file 
+5. Add your [OpenAI API key](https://beta.openai.com/account/api-keys) to the newly created `.env` file
 
 
-6. Create your bot and add the [Telegram Bot API key](https://core.telegram.org/bots) to your `.env`, then make it an admin of at least one Telegram group
+6. Add your [Etherscan API key](https://etherscan.io/apis) to your `.env`
 
 
-7. Create an AWS DynamoDB table named `chat_info` with `chat_id` as the primary key, and add your AWS account's access key(s) to the `.env` file as well
+7. Create your bot and add the [Telegram Bot API key](https://core.telegram.org/bots) to your `.env`, then make it an admin of at least one Telegram group
 
 
-8. Run Henry!
+8. Create an AWS DynamoDB table named `chat_info` with `chat_id` as the primary key, and add your AWS account's access key(s) to the `.env` file as well
+
+
+9. Run Henry!
 
    ```bash
         python3 henry.py
