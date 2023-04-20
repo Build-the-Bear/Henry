@@ -19,11 +19,10 @@ import time
 import ast
 import os
 
-from web3 import Web3, HTTPProvider
-
-from henryPrompts import *
 from boto3.dynamodb.conditions import Key
+from web3 import Web3, HTTPProvider
 from dotenv import load_dotenv
+from henryPrompts import *
 
 # load environment variables
 load_dotenv("./.env")
@@ -127,6 +126,8 @@ def getTelegramUpdates(startup):
                         if triggerFound and isSentence(txt) and haveNotReplied(cid, mid):
                             triggerPrompt = ""
 
+                            logging.info(mes)
+
                             # if the matching message happens to be a reply itself, get thread context
                             if "reply_to_message" in mes and "username" in mes["from"]:
                                 triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + mes["from"]["username"] + ": " + txt + "\n"
@@ -136,7 +137,7 @@ def getTelegramUpdates(startup):
                                 triggerPrompt = "Anonymous: " + txt
 
                             triggerResponse(triggerPrompt, cid, mid)
-    except ValueError as err:
+    except BaseException as err:
         logging.info(err)
 
 # fetch existing chats_ids from aws
@@ -156,8 +157,8 @@ def getExistingChatInformation():
                 existingSettings[i["chat_id"]] = {}
 
             existingReplies[str(i["chat_id"])] = ast.literal_eval(i["chat_replies"])
-    except:
-        logging.info("Henry couldn't fetch existing chat information")
+    except BaseException as err:
+        logging.info("Henry couldn't fetch existing chat information - " + err)
 
 # save new chat information
 def checkForNewChatID(chatID):
@@ -167,8 +168,8 @@ def checkForNewChatID(chatID):
             existingReplies[str(chatID)] = [0, 1]
 
             chatInfo.put_item(Item={"chat_id": chatID, "chat_replies": str([0, 1]), "chat_settings": {}})
-    except:
-        logging.info("Henry couldn't figure out if he was in a new chat or not")
+    except BaseException as err:
+        logging.info("Henry couldn't figure out if he was in a new chat or not - " + err)
 
 # determine if chat is a group chat
 def isGroupChat(chatID):
@@ -182,8 +183,8 @@ def isGroupChat(chatID):
 
         if type != "private": return True
         else: return False
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry couldn't figure out whether or not he was in a group chat" + err)
+    except BaseException as err:
+        logging.info("Henry couldn't figure out whether or not he was in a group chat - " + err)
 
 # determine if string is a sentence
 def isSentence(s):
@@ -219,8 +220,8 @@ def fromAdmin(chatID, userID):
             if "status" in response and (response["status"] == "administrator" or response["status"] == "creator"):
                 return True
             else: return False
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry couldn't figure out how to open the door: " + err)
+    except BaseException as err:
+        logging.info("Henry couldn't figure out how to open the door - " + err)
 
 # determine if parse string has any-case match
 def anyCaseMatch(match, parse):
@@ -254,8 +255,8 @@ def spice(message, isReply, optionalPrompt):
             )
 
             mess = response.choices[0].text.strip()
-        except:
-            logging.info("Henry couldn't figure out how to open the door, someone changed the lock")
+        except BaseException as err:
+            logging.info("Henry couldn't figure out how to open the door, someone changed the lock - " + err)
 
         # clean up the presentation
         mapping = [ ("Henry the Hypemachine:", ""),
@@ -293,7 +294,7 @@ def triggerResponse(toMessage, chatID, messageID):
 
     floodedChatID = checkFlood(chatID, timeIgnored)
 
-    if checkSetting(chatID, "/toggleReplies") != "off" and chatID != floodedChatID:
+    if checkSetting(chatID, "/toggleReplies") != "off" and (chatID != floodedChatID or telegramAPIKey == os.getenv("DEV_TELEGRAM_API_KEY")):
         mess = spice(toMessage, False, "")
 
     # if the message was constructed and should be sent
@@ -325,8 +326,8 @@ def sendRandomMessage(shouldSend):
             lastChatIDs.append(chatID)
 
             logging.info("Henry had some words to say in Chat " + str(chatID) + ": " + mess)
-        except requests.exceptions.HTTPError as err:
-            logging.info("Henry was met with a closed door: " + err)
+        except BaseException as err:
+            logging.info("Henry was met with a closed door - " + err)
 
 # send henry's message(s) off to the telegram api
 def sendResponse(chatID, messageID, message):
@@ -368,8 +369,8 @@ def sendResponse(chatID, messageID, message):
                 x = requests.post(url, json={})
 
                 logging.info("Henry sent a sticker to Chat " + cid + ": " + stickerID)
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry was met with a closed door: " + err)
+    except BaseException as err:
+        logging.info("Henry was met with a closed door - " + err)
 
 # update database
 def updateDatabase(chatID, replies, settings, lastReply):
@@ -394,8 +395,8 @@ def updateDatabase(chatID, replies, settings, lastReply):
             },
             ReturnValues="UPDATED_NEW"
         )
-    except requests.exceptions.HTTPError as err:
-        logging.info("Henry was met with a closed door: " + err)
+    except BaseException as err:
+        logging.info("Henry was met with a closed door - " + err)
 
 # functions specific to Build the Bear channels
 def nowBuildTheBear():
@@ -413,6 +414,7 @@ def toggleSetting(chatID, messageID, setting, value):
 # check settings for a given chat
 def checkSetting(chatID, setting):
     if chatID in existingSettings and setting in existingSettings[chatID]:
+        logging.info(existingSettings[chatID])
         return existingSettings[chatID][setting]
     else: return "on"
 
@@ -435,8 +437,8 @@ def checkPrices(lastPriceMessage):
 
             btbPrice = getTokenUsdPrice("0xe708fE7FCE0c3FcAc741E49a20439D79177753FA")
             currentPriceMessage += "\nBTB   🐻   $" + str(btbPrice)
-        except requests.exceptions.HTTPError as err:
-            logging.info("Henry was met with a closed door: " + err)
+        except BaseException as err:
+            logging.info("Henry was met with a closed door - " + err)
 
         lastPriceMessage = currentPriceMessage
 
@@ -471,8 +473,8 @@ def getTokenUsdPrice(pairAddress):
         tokenUsdPrice = round(tokenEthPrice * ethPrice, 4)
 
         return tokenUsdPrice
-    except ValueError as err:
-        logging.info(err)
+    except BaseException as err:
+        logging.info("Henry wasn't able to fetch the token's price - " + err)
 
 # initialize
 if __name__ == "__main__":
