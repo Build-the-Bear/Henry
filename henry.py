@@ -126,8 +126,6 @@ def getTelegramUpdates(startup):
                         if triggerFound and isSentence(txt) and haveNotReplied(cid, mid):
                             triggerPrompt = ""
 
-                            logging.info(mes)
-
                             # if the matching message happens to be a reply itself, get thread context
                             if "reply_to_message" in mes and "username" in mes["from"]:
                                 triggerPrompt = mes["reply_to_message"]["from"]["username"] + ": " + mes["reply_to_message"]["text"] + "\n" + mes["from"]["username"] + ": " + txt + "\n"
@@ -414,7 +412,6 @@ def toggleSetting(chatID, messageID, setting, value):
 # check settings for a given chat
 def checkSetting(chatID, setting):
     if chatID in existingSettings and setting in existingSettings[chatID]:
-        logging.info(existingSettings[chatID])
         return existingSettings[chatID][setting]
     else: return "on"
 
